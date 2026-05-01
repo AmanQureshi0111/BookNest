@@ -6,5 +6,5 @@ server\uploads
 client\.env
 server\.env
 dist
-.txt
+goal.txt
 
