@@ -5,6 +5,8 @@ server\uploads
 .env
 client\.env
 server\.env
+client\.env.example
+server\.env.example
 dist
 goal.txt
 
