@@ -1,7 +1,6 @@
-import fs from "fs";
-import path from "path";
 import { body, param, query } from "express-validator";
 import { Book } from "../models/Book.js";
+import { deleteStoredFile, getPdfContent, uploadPdfBuffer } from "../services/storageService.js";
 
 export const uploadValidators = [
   body("title").trim().notEmpty().withMessage("Title is required."),
@@ -14,12 +13,18 @@ export const uploadBook = async (req, res) => {
     return res.status(400).json({ message: "PDF file is required." });
   }
 
+  const stored = await uploadPdfBuffer({
+    buffer: req.file.buffer,
+    originalName: req.file.originalname,
+    mimetype: req.file.mimetype
+  });
+
   const book = await Book.create({
     title: req.body.title,
     author: req.body.author,
     description: req.body.description || "",
     uploadedBy: req.user._id,
-    filePath: req.file.filename || path.basename(req.file.path)
+    filePath: stored.filePath
   });
   return res.status(201).json(book);
 };
@@ -36,9 +41,7 @@ export const deleteBook = async (req, res) => {
   }
 
   await book.deleteOne();
-  if (fs.existsSync(book.filePath)) {
-    fs.unlinkSync(book.filePath);
-  }
+  await deleteStoredFile(book.filePath);
   return res.json({ message: "Book deleted." });
 };
 
@@ -120,20 +123,12 @@ export const serveBook = async (req, res) => {
     return res.status(404).json({ message: "Book not found." });
   }
 
-  const uploadDir = path.resolve(process.env.UPLOAD_DIR || "uploads");
-  const filePathValue = String(book.filePath || "");
-  const candidates = [
-    filePathValue,
-    path.resolve(filePathValue),
-    path.join(uploadDir, filePathValue),
-    path.join(uploadDir, path.basename(filePathValue))
-  ];
-  const resolved = candidates.find((candidate) => candidate && fs.existsSync(candidate));
-
-  if (!resolved) {
+  const content = await getPdfContent(book.filePath);
+  if (!content) {
     return res.status(404).json({
       message: "File missing on server. Re-upload this book."
     });
   }
-  return res.sendFile(path.resolve(resolved));
+  res.setHeader("Content-Type", content.contentType);
+  return content.stream.pipe(res);
 };
