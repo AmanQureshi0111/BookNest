@@ -15,6 +15,7 @@ const bookSchema = new mongoose.Schema(
     description: { type: String, default: "" },
     uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     filePath: { type: String, required: true },
+    fileUrl: { type: String, default: null },
     likes: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
     comments: [commentSchema]
   },

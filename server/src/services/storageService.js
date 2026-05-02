@@ -1,13 +1,8 @@
 import fs from "fs";
 import path from "path";
 import { Readable } from "stream";
-import {
-  DeleteObjectCommand,
-  GetObjectCommand,
-  PutObjectCommand,
-  S3Client
-} from "@aws-sdk/client-s3";
-import { isS3Storage } from "../config/env.js";
+import cloudinary from "../config/cloudinary.js";
+import { isCloudinaryStorage } from "../config/env.js";
 
 const uploadDir = path.resolve(process.env.UPLOAD_DIR || "uploads");
 
@@ -17,99 +12,103 @@ const ensureUploadDir = () => {
   }
 };
 
+const resolveLocalFile = (filePath) => {
+  const raw = String(filePath || "");
+  const candidates = [
+    raw,
+    path.resolve(raw),
+    path.join(uploadDir, raw),
+    path.join(uploadDir, path.basename(raw))
+  ];
+  return candidates.find((candidate) => candidate && fs.existsSync(candidate)) || null;
+};
+
 const buildFileName = (originalName = "book.pdf") => {
   const ext = path.extname(originalName) || ".pdf";
   return `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
 };
 
-const getS3Client = () =>
-  new S3Client({
-    region: process.env.S3_REGION,
-    credentials: {
-      accessKeyId: process.env.S3_ACCESS_KEY_ID,
-      secretAccessKey: process.env.S3_SECRET_ACCESS_KEY
-    }
+const uploadToCloudinary = (buffer, originalName) =>
+  new Promise((resolve, reject) => {
+    const fileName = buildFileName(originalName);
+    const publicId = `booknest/books/${path.parse(fileName).name}`;
+
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        resource_type: "raw",
+        public_id: publicId,
+        format: "pdf",
+        overwrite: false
+      },
+      (error, result) => {
+        if (error || !result) {
+          reject(error || new Error("Cloudinary upload failed."));
+          return;
+        }
+        resolve(result);
+      }
+    );
+
+    stream.end(buffer);
   });
 
-export const uploadPdfBuffer = async ({ buffer, originalName, mimetype }) => {
+export const uploadPdfBuffer = async ({ buffer, originalName }) => {
   const fileName = buildFileName(originalName);
 
-  if (!isS3Storage()) {
+  if (!isCloudinaryStorage()) {
     ensureUploadDir();
     const absolute = path.join(uploadDir, fileName);
     fs.writeFileSync(absolute, buffer);
-    return { filePath: fileName };
+    return { filePath: fileName, fileUrl: null };
   }
 
-  const client = getS3Client();
-  await client.send(
-    new PutObjectCommand({
-      Bucket: process.env.S3_BUCKET,
-      Key: `books/${fileName}`,
-      Body: buffer,
-      ContentType: mimetype || "application/pdf"
-    })
-  );
-  return { filePath: `books/${fileName}` };
+  const uploadResult = await uploadToCloudinary(buffer, originalName);
+  return { filePath: uploadResult.public_id, fileUrl: uploadResult.secure_url };
 };
 
 export const deleteStoredFile = async (filePath) => {
   if (!filePath) return;
 
-  if (!isS3Storage()) {
-    const candidates = [
-      filePath,
-      path.resolve(filePath),
-      path.join(uploadDir, filePath),
-      path.join(uploadDir, path.basename(filePath))
-    ];
-    const resolved = candidates.find((candidate) => candidate && fs.existsSync(candidate));
+  if (!isCloudinaryStorage()) {
+    const resolved = resolveLocalFile(filePath);
     if (resolved) {
       fs.unlinkSync(resolved);
     }
     return;
   }
 
-  const key = String(filePath).replace(/^\/+/, "");
-  const client = getS3Client();
-  await client.send(
-    new DeleteObjectCommand({
-      Bucket: process.env.S3_BUCKET,
-      Key: key
-    })
-  );
+  await cloudinary.uploader.destroy(String(filePath), { resource_type: "raw" });
 };
 
-export const getPdfContent = async (filePath) => {
-  if (!isS3Storage()) {
-    const candidates = [
-      filePath,
-      path.resolve(filePath),
-      path.join(uploadDir, filePath),
-      path.join(uploadDir, path.basename(filePath))
-    ];
-    const resolved = candidates.find((candidate) => candidate && fs.existsSync(candidate));
-    if (!resolved) return null;
-
+export const getPdfContent = async ({ filePath, fileUrl }) => {
+  const localResolved = resolveLocalFile(filePath);
+  if (localResolved) {
     return {
-      stream: fs.createReadStream(path.resolve(resolved)),
+      stream: fs.createReadStream(path.resolve(localResolved)),
       contentType: "application/pdf"
     };
   }
 
-  const key = String(filePath).replace(/^\/+/, "");
-  const client = getS3Client();
-  const obj = await client.send(
-    new GetObjectCommand({
-      Bucket: process.env.S3_BUCKET,
-      Key: key
-    })
-  );
+  if (!isCloudinaryStorage()) {
+    return null;
+  }
 
-  if (!obj.Body) return null;
-  const stream = obj.Body instanceof Readable ? obj.Body : Readable.fromWeb(obj.Body);
+  const resolvedUrl =
+    fileUrl ||
+    cloudinary.url(String(filePath), {
+      resource_type: "raw",
+      secure: true
+    });
+
+  const response = await fetch(resolvedUrl);
+  if (!response.ok || !response.body) {
+    return null;
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+  const stream = Readable.from(Buffer.from(arrayBuffer));
   return {
     stream,
-    contentType: obj.ContentType || "application/pdf"
+    contentType: response.headers.get("content-type") || "application/pdf"
   };
 };

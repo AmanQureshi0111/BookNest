@@ -15,8 +15,7 @@ export const uploadBook = async (req, res) => {
 
   const stored = await uploadPdfBuffer({
     buffer: req.file.buffer,
-    originalName: req.file.originalname,
-    mimetype: req.file.mimetype
+    originalName: req.file.originalname
   });
 
   const book = await Book.create({
@@ -24,7 +23,8 @@ export const uploadBook = async (req, res) => {
     author: req.body.author,
     description: req.body.description || "",
     uploadedBy: req.user._id,
-    filePath: stored.filePath
+    filePath: stored.filePath,
+    fileUrl: stored.fileUrl
   });
   return res.status(201).json(book);
 };
@@ -123,12 +123,21 @@ export const serveBook = async (req, res) => {
     return res.status(404).json({ message: "Book not found." });
   }
 
-  const content = await getPdfContent(book.filePath);
-  if (!content) {
-    return res.status(404).json({
-      message: "File missing on server. Re-upload this book."
+  try {
+    const content = await getPdfContent({
+      filePath: book.filePath,
+      fileUrl: book.fileUrl
+    });
+    if (!content) {
+      return res.status(404).json({
+        message: "File missing on server. Re-upload this book."
+      });
+    }
+    res.setHeader("Content-Type", content.contentType);
+    return content.stream.pipe(res);
+  } catch {
+    return res.status(500).json({
+      message: "Unable to stream PDF right now. Try re-uploading this book."
     });
   }
-  res.setHeader("Content-Type", content.contentType);
-  return content.stream.pipe(res);
 };

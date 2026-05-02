@@ -1,80 +1,39 @@
 # BookNest
 
-BookNest is a full-stack PDF library and reader app with JWT auth, personal uploads, public library browsing, and in-browser PDF reading with progress tracking.
+BookNest is a full-stack PDF library and reader app with JWT auth, uploads, public library browsing, and in-browser PDF reading with progress tracking.
 
-## Tech stack
+## Stack
 
-- **Frontend:** React + Tailwind CSS + Vite
-- **Backend:** Node.js + Express
-- **Database:** MongoDB Atlas (Mongoose)
-- **Auth:** JWT (email/username + password)
-- **Storage:** Local (dev) or AWS S3 (production)
-- **PDF Rendering:** `react-pdf`
+- Frontend: React + Tailwind + Vite
+- Backend: Node.js + Express
+- Database: MongoDB Atlas
+- File storage: Local (dev) or Cloudinary (free-tier production)
 
-## Project structure
-
-```text
-bookNest/
-  client/   # React frontend
-  server/   # Express backend
-```
-
-## Backend API
-
-### Auth
-- `POST /api/auth/register`
-- `POST /api/auth/login`
-
-### Books
-- `POST /api/books/upload`
-- `DELETE /api/books/delete/:id`
-- `GET /api/books/all`
-- `GET /api/books/user`
-- `GET /api/books/file/:id`
-- `POST /api/books/:id/favorite`
-- `POST /api/books/:id/comments`
-
-### Progress
-- `POST /api/progress/save`
-- `GET /api/progress/get/:bookId`
-- `GET /api/progress/recent`
-
-## Security and production hardening
-
-- Helmet security headers
-- API rate limiting
-- CORS allow-list (`CLIENT_URLS`)
-- Request compression
-- Input validation (`express-validator`)
-- JWT-protected private routes
-- PDF-only upload filter + 10MB upload limit
-- Fail-fast env validation on server startup
-
-## Environment variables
+## Environment
 
 Create `server/.env` from `server/.env.example`.
 
-Required:
+### Required server vars
+
 - `MONGODB_URI`
 - `JWT_SECRET`
 - `JWT_EXPIRES_IN`
-- `CLIENT_URL` (single frontend URL)
-- `CLIENT_URLS` (comma-separated list if multiple frontends)
-- `STORAGE_PROVIDER` (`local` or `s3`)
+- `CLIENT_URL`
+- `CLIENT_URLS`
+- `STORAGE_PROVIDER` (`local` or `cloudinary`)
 
-For local storage:
+If `STORAGE_PROVIDER=local`:
 - `UPLOAD_DIR`
 
-For S3 storage:
-- `S3_REGION`
-- `S3_BUCKET`
-- `S3_ACCESS_KEY_ID`
-- `S3_SECRET_ACCESS_KEY`
+If `STORAGE_PROVIDER=cloudinary`:
+- `CLOUDINARY_CLOUD_NAME`
+- `CLOUDINARY_API_KEY`
+- `CLOUDINARY_API_SECRET`
 
 Frontend `client/.env`:
-- `VITE_API_URL` (example: `https://api.your-domain.com/api`)
+- `VITE_API_URL` (example: `https://your-backend.onrender.com/api`)
 
-## Local development
+## Local run
 
 Backend:
 ```bash
@@ -90,37 +49,45 @@ npm install
 npm run dev
 ```
 
-## Production deployment (recommended)
+## Free deployment (recommended)
 
-### 1. MongoDB Atlas
-1. Create Atlas cluster.
-2. Create DB user.
-3. Allow your backend host IP in Network Access.
-4. Copy connection string into `MONGODB_URI`.
+1. MongoDB Atlas (free M0 cluster)
+   - Create cluster, DB user, allow network access.
+   - Copy connection string to `MONGODB_URI`.
 
-### 2. AWS S3 (required for durable file storage)
-1. Create bucket (private).
-2. Create IAM user with S3 permissions for that bucket.
-3. Add `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`.
-4. Set `STORAGE_PROVIDER=s3`.
+2. Cloudinary (free tier)
+   - Create account.
+   - From dashboard copy:
+     - Cloud name
+     - API key
+     - API secret
 
-### 3. Backend deploy (Render)
-1. Create Web Service from this repo.
-2. Root directory: `server`
-3. Build command: `npm install`
-4. Start command: `npm start`
-5. Add backend env vars from above.
-6. Set `NODE_ENV=production`.
+3. Deploy backend on Render (free tier)
+   - Root directory: `server`
+   - Build command: `npm install`
+   - Start command: `npm start`
+   - Set env:
+     - `NODE_ENV=production`
+     - `MONGODB_URI=...`
+     - `JWT_SECRET=...`
+     - `JWT_EXPIRES_IN=7d`
+     - `CLIENT_URL=https://<your-vercel-app>.vercel.app`
+     - `CLIENT_URLS=https://<your-vercel-app>.vercel.app`
+     - `STORAGE_PROVIDER=cloudinary`
+     - `CLOUDINARY_CLOUD_NAME=...`
+     - `CLOUDINARY_API_KEY=...`
+     - `CLOUDINARY_API_SECRET=...`
 
-### 4. Frontend deploy (Vercel)
-1. Import same repo in Vercel.
-2. Root directory: `client`
-3. Build command: `npm run build`
-4. Output directory: `dist`
-5. Set `VITE_API_URL=https://<render-service-domain>/api`
+4. Deploy frontend on Vercel (free tier)
+   - Root directory: `client`
+   - Build command: `npm run build`
+   - Output directory: `dist`
+   - Env:
+     - `VITE_API_URL=https://<your-render-backend>.onrender.com/api`
 
-### 5. Final wiring
-1. Copy Vercel URL.
-2. Set backend `CLIENT_URL` to that URL.
-3. Set `CLIENT_URLS` (same URL or comma-separated list).
-4. Redeploy backend.
+5. Final wiring
+   - Update Render `CLIENT_URL` and `CLIENT_URLS` with exact Vercel URL.
+   - Redeploy backend once.
+
+6. Verify
+   - Register/login, upload PDF, open reader, refresh, open again.

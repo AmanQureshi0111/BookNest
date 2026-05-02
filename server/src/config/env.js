@@ -1,4 +1,4 @@
-const required = ["MONGODB_URI", "JWT_SECRET"];
+const required = ["MONGODB_URI", "JWT_SECRET", "CLIENT_URL"];
 
 export const validateEnv = () => {
   const missing = required.filter((key) => !process.env[key]);
@@ -7,13 +7,21 @@ export const validateEnv = () => {
   }
 
   const provider = process.env.STORAGE_PROVIDER || "local";
-  if (provider === "s3") {
-    const s3Required = ["S3_REGION", "S3_BUCKET", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY"];
-    const missingS3 = s3Required.filter((key) => !process.env[key]);
-    if (missingS3.length) {
-      throw new Error(`Missing required S3 env variables: ${missingS3.join(", ")}`);
+  if (!["local", "cloudinary"].includes(provider)) {
+    throw new Error("STORAGE_PROVIDER must be either 'local' or 'cloudinary'.");
+  }
+
+  if (provider === "cloudinary") {
+    const cloudinaryRequired = [
+      "CLOUDINARY_CLOUD_NAME",
+      "CLOUDINARY_API_KEY",
+      "CLOUDINARY_API_SECRET"
+    ];
+    const missingCloudinary = cloudinaryRequired.filter((key) => !process.env[key]);
+    if (missingCloudinary.length) {
+      throw new Error(`Missing required Cloudinary env variables: ${missingCloudinary.join(", ")}`);
     }
   }
 };
 
-export const isS3Storage = () => (process.env.STORAGE_PROVIDER || "local") === "s3";
+export const isCloudinaryStorage = () => (process.env.STORAGE_PROVIDER || "local") === "cloudinary";
